@@ -103,6 +103,9 @@ def main(argv: list[str] | None = None) -> int:
 
     st = sub.add_parser("study", help="measure fidelity for every ramp and colour mode")
     st.add_argument("--out", default="out")
+    st.add_argument("--scenes", default="", help="comma separated subset of scenes")
+    st.add_argument("--times", default="", help="comma separated subset of frame times")
+    st.add_argument("--specs", default="", help="comma separated ramp/mode/matcher keys")
     st.add_argument("--no-dump", dest="dump", action="store_false",
                     help="skip writing the per-frame source and ANSI the checker reads")
 
@@ -149,7 +152,12 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "study":
         def prog(i, n, key):
             print(f"  [{i + 1:2d}/{n}] {key}", file=sys.stderr)
-        rep = study.run(fnt, pathlib.Path(a.out), dump=a.dump, progress=prog)
+        rep = study.run(
+            fnt, pathlib.Path(a.out), dump=a.dump, progress=prog,
+            scene_names=[s for s in a.scenes.split(",") if s] or None,
+            times=[float(x) for x in a.times.split(",") if x] or None,
+            specs=[study.spec_from_key(k) for k in a.specs.split(",") if k] or None,
+        )
         print(f"{len(rep['results'])} measurements written to {a.out}/fidelity.json")
         return 0
 

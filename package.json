@@ -1,0 +1,10 @@
+{
+  "name": "ascii-video",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Browser check for the ascii-video docs page.",
+  "type": "module",
+  "scripts": {
+    "check": "node scripts/browser_check.mjs"
+  }
+}

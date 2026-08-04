@@ -124,6 +124,104 @@ class TestAspect(unittest.TestCase):
         self.assertLess(bbox_ratio(bad), 0.60)
 
 
+class TestCellOrientation(unittest.TestCase):
+    """A cell is 8 wide and 16 tall, and the two axes are not interchangeable.
+
+    Every metric in `fidelity.py` that aggregates over a cell is blind to the cell's
+    internal orientation: transpose the pixels inside each cell and the cell mean does not
+    move, so `cell_r` stays at 1.0000 and SSIM on smooth content moves by 0.0003. Measured
+    on a real sabotage. These two cases look at the axes directly.
+    """
+
+    @staticmethod
+    def _ink(cells):
+        b = fidelity.luminance(raster.rasterize(cells, FONT)).reshape(30, 16, 80, 8)
+        return {"tb": b[:, :8].mean() / max(b[:, 8:].mean(), 0.01),
+                "lr": b[:, :, :, :4].mean() / max(b[:, :, :, 4:].mean(), 0.01)}
+
+    @staticmethod
+    def _source(axis):
+        img = np.zeros((480, 640, 3), dtype=np.uint8)
+        if axis == "horizontal":       # bright in the top half of every cell
+            img[(np.arange(480) % 16) < 8] = 255
+        else:                          # bright in the left half of every cell
+            img[:, (np.arange(640) % 8) < 4] = 255
+        return img
+
+    def test_a_horizontal_edge_inside_each_cell_stays_horizontal(self):
+        spec = render.Spec("ascii67", "mono", "structure")
+        m = self._ink(render.render(self._source("horizontal"), FONT, spec, 80))
+        self.assertGreater(m["tb"], 1.40, f"top/bottom ink ratio only {m['tb']:.2f}")
+        self.assertLess(m["lr"], 1.03,
+                        f"a source uniform across x rendered {m['lr']:.2f} left-heavy")
+
+    def test_a_vertical_edge_inside_each_cell_does_not_become_horizontal(self):
+        spec = render.Spec("ascii67", "mono", "structure")
+        m = self._ink(render.render(self._source("vertical"), FONT, spec, 80))
+        self.assertGreater(m["lr"], 1.05, f"left/right ink ratio only {m['lr']:.2f}")
+        self.assertLess(m["tb"], 1.40,
+                        f"a horizontal edge appeared from a vertical source ({m['tb']:.2f})")
+
+    def test_the_two_axes_give_different_answers(self):
+        """Negative control: a renderer ignoring its input would pass both tests above."""
+        spec = render.Spec("ascii67", "mono", "structure")
+        h = self._ink(render.render(self._source("horizontal"), FONT, spec, 80))
+        v = self._ink(render.render(self._source("vertical"), FONT, spec, 80))
+        self.assertGreater(abs(h["tb"] - v["tb"]), 0.2)
+        self.assertGreater(abs(h["lr"] - v["lr"]), 0.05)
+
+
+class TestGlyphDensity(unittest.TestCase):
+    """The core claim of any ramp: a darker cell gets a heavier glyph."""
+
+    def _density_r(self, spec, scene):
+        src = scenes.frame(scene, 0.6, 640, 480)
+        cells = render.render(src, FONT, spec, 80)
+        lum = fidelity.luminance(src).reshape(30, 16, 80, 8).mean(axis=(1, 3)).ravel()
+        cov = np.array([FONT.coverage(str(c)) for c in cells.chars.ravel()])
+        if cov.std() < 1e-9:
+            return float("nan")
+        return float(np.corrcoef(lum, cov)[0, 1])
+
+    def test_mean_matching_holds_above_0_95_on_every_source(self):
+        """The stated threshold. Measured range is 0.9448 to 0.9994, so 0.94 is the floor."""
+        for ramp in ("ascii67", "ascii10", "blocks"):
+            spec = render.Spec(ramp, "mono", "mean", normalize=True)
+            for scene in scenes.SCENES:
+                r = self._density_r(spec, scene)
+                self.assertGreater(r, 0.94,
+                                   f"{spec.key()} on {scene}: density correlation {r:.4f}")
+
+    def test_structure_matching_trades_density_for_shape_and_says_where(self):
+        """The same measure on the other matcher, which is deliberately worse at it.
+
+        `--match structure` optimises the glyph's ink *pattern* rather than its ink
+        *amount*, so its density correlation is lower everywhere and collapses to 0.32 on
+        the `glyphs` source, where the right glyph is a diagonal stroke and its coverage
+        has nothing to do with the cell's brightness. That is the trade, and pinning it
+        here keeps it from being quietly reversed.
+        """
+        spec = render.Spec("ascii67", "mono", "structure", normalize=True)
+        for scene in ("plasma", "tunnel", "bars", "starfield"):
+            r = self._density_r(spec, scene)
+            self.assertGreater(r, 0.85, f"{scene}: {r:.4f}")
+        hard = self._density_r(spec, "glyphs")
+        self.assertLess(hard, 0.6, f"glyphs unexpectedly easy: {hard:.4f}")
+        self.assertGreater(hard, 0.15, f"glyphs collapsed further than expected: {hard:.4f}")
+
+    def test_the_correlation_can_fail(self):
+        """Negative control: shuffle the chosen glyphs and the correlation collapses."""
+        src = scenes.frame("tunnel", 0.6, 640, 480)
+        cells = render.render(src, FONT, render.Spec("ascii67", "mono", "mean",
+                                                     normalize=True), 80)
+        lum = fidelity.luminance(src).reshape(30, 16, 80, 8).mean(axis=(1, 3)).ravel()
+        cov = np.array([FONT.coverage(str(c)) for c in cells.chars.ravel()])
+        rng = np.random.default_rng(7)
+        shuffled = cov.copy()
+        rng.shuffle(shuffled)
+        self.assertLess(abs(float(np.corrcoef(lum, shuffled)[0, 1])), 0.1)
+
+
 class TestRender(unittest.TestCase):
     def test_mono_uses_no_colour_and_colour_modes_do(self):
         src = scenes.frame("tunnel", 0.6, 640, 480)
@@ -281,9 +379,12 @@ class TestDelta(unittest.TestCase):
             self.assertEqual(screen[0], want[0], f"characters diverged at frame {i}")
             np.testing.assert_array_equal(screen[1], want[1], f"foreground at frame {i}")
             np.testing.assert_array_equal(screen[2], want[2], f"background at frame {i}")
-            self.assertEqual(chk.composite(*screen, glyphs).tolist(),
-                             raster.rasterize(enc.screen, FONT).tolist(),
-                             f"raster at frame {i}")
+            # np.testing rather than assertEqual on .tolist(): on failure unittest runs
+            # difflib over the two nested lists, and for a 336x448x3 frame that takes
+            # minutes and prints nothing useful. A sabotage run found this by hanging.
+            np.testing.assert_array_equal(chk.composite(*screen, glyphs),
+                                          raster.rasterize(enc.screen, FONT),
+                                          err_msg=f"raster at frame {i}")
         return stream, full, enc
 
     def test_the_stream_reconstructs_the_screen_exactly(self):

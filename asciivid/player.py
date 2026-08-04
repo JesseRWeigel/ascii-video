@@ -40,8 +40,8 @@ def schedule(n: int, fps: float, now: Callable[[], float], sleep: Callable[[floa
              *, origin: float | None = None, drop: bool = True) -> Iterator[Tick]:
     """Yield one Tick per frame, sleeping until each absolute deadline.
 
-    `now` and `sleep` are injected so a test can run ten thousand frames of a clip in
-    milliseconds and inspect the drift, which is not something you can measure by watching.
+    `now` and `sleep` are injected so a test can run a ten minute clip in milliseconds and
+    inspect the drift, which is not something you can measure by watching.
     """
     if fps <= 0:
         raise ValueError("fps must be positive")

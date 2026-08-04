@@ -37,7 +37,11 @@ import sys
 import numpy as np
 
 GW, GH = 8, 16                 # glyph cell, width by height
-TOL = 1e-5                     # fidelity.json is rounded to 6 decimals
+# Relative, with a floor for values near zero. fidelity.json is rounded to 6 decimals, so
+# the floor is what an absolute-zero comparison would need anyway; the relative part is what
+# keeps the same tolerance meaningful for rgb_rmse, which runs to 160 rather than to 1.
+REL_TOL = 1e-5
+ABS_FLOOR = 2e-6
 C1 = (0.01 * 255.0) ** 2
 C2 = (0.03 * 255.0) ** 2
 WIN = 8
@@ -397,6 +401,10 @@ def main() -> int:
         got = measure(src, composite(chars, fg, bg, glyphs))
         for k, v in got.items():
             claimed = r[k]
+            if claimed is None:
+                if not math.isnan(v):
+                    bad.append(f"{path.name}: {k} claimed null, re-derived {v:.6f}")
+                continue
             if isinstance(claimed, float) and math.isnan(claimed):
                 if not math.isnan(v):
                     bad.append(f"{path.name}: {k} claimed NaN, re-derived {v:.6f}")
@@ -405,22 +413,24 @@ def main() -> int:
                 bad.append(f"{path.name}: {k} re-derived as NaN, claimed {claimed:.6f}")
                 continue
             d = abs(v - claimed)
-            worst[k] = max(worst[k], d)
-            if d > TOL:
+            allowed = max(ABS_FLOOR, REL_TOL * abs(claimed))
+            worst[k] = max(worst[k], d / allowed)
+            if d > allowed:
                 bad.append(f"{path.name}: {k} claimed {claimed:.6f}, re-derived {v:.6f} "
-                           f"(delta {d:.2e})")
+                           f"(delta {d:.2e}, allowed {allowed:.2e})")
         if (i + 1) % 100 == 0:
             print(f"  {i + 1}/{len(todo)} renders re-derived", flush=True)
 
     print(f"  {len(todo)} renders re-derived from the emitted ANSI")
-    print("  worst disagreement: " + ", ".join(f"{k} {v:.2e}" for k, v in worst.items()))
+    print("  worst disagreement, as a fraction of the tolerance allowed: "
+          + ", ".join(f"{k} {v:.3f}" for k, v in worst.items()))
     if bad:
         print(f"FIDELITY MISMATCH: {len(bad)} problems", file=sys.stderr)
         for line in bad[:10]:
             print(f"    {line}", file=sys.stderr)
         return 1
-    print(f"  every number in {report_path} matches an independent re-derivation "
-          f"within {TOL:g}")
+    print(f"  every number in {report_path} matches an independent re-derivation within "
+          f"{REL_TOL:g} relative (floor {ABS_FLOOR:g})")
     return 0
 
 

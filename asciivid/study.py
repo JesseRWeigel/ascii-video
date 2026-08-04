@@ -52,15 +52,33 @@ def safe(name: str) -> str:
     return name.replace("/", "-").replace("+", "-plus-")
 
 
-def run(font, outdir: pathlib.Path, *, dump: bool = True, progress=None) -> dict:
+def spec_from_key(key: str) -> render.Spec:
+    """Parse `ramp/mode/matcher[+dither][+norm]` back into a Spec."""
+    head, _, flags = key.partition("+")
+    parts = head.split("/")
+    if len(parts) != 3:
+        raise ValueError(f"bad spec key {key!r}, expected ramp/mode/matcher[+dither][+norm]")
+    tags = set(f for f in flags.split("+") if f)
+    unknown = tags - {"dither", "norm"}
+    if unknown:
+        raise ValueError(f"bad spec key {key!r}: unknown flag(s) {sorted(unknown)}")
+    spec = render.Spec(parts[0], parts[1], parts[2], "dither" in tags, "norm" in tags)
+    spec.validate()
+    return spec
+
+
+def run(font, outdir: pathlib.Path, *, dump: bool = True, progress=None,
+        scene_names=None, times=None, specs=None) -> dict:
     outdir = pathlib.Path(outdir)
     (outdir / "source").mkdir(parents=True, exist_ok=True)
     (outdir / "render").mkdir(parents=True, exist_ok=True)
 
-    specs = combinations()
+    scene_names = list(scene_names) if scene_names else list(scenes.SCENES)
+    times = list(times) if times else list(TIMES)
+    specs = list(specs) if specs else combinations()
     frames: list[tuple[str, float, np.ndarray]] = []
-    for name in scenes.SCENES:
-        for t in TIMES:
+    for name in scene_names:
+        for t in times:
             img = scenes.frame(name, t, SCENE_W, SCENE_H)
             frames.append((name, t, img))
             if dump:
@@ -90,8 +108,8 @@ def run(font, outdir: pathlib.Path, *, dump: bool = True, progress=None) -> dict
     report = {
         "font_sha256": font.digest,
         "grid": {"cols": COLS, "rows": SCENE_H // 16},
-        "source": {"width": SCENE_W, "height": SCENE_H, "scenes": list(scenes.SCENES),
-                   "times": list(TIMES)},
+        "source": {"width": SCENE_W, "height": SCENE_H, "scenes": scene_names,
+                   "times": times},
         "metrics": {
             "ssim": "mean SSIM over non-overlapping 8x8 luminance windows, 1.0 is identical",
             "ssim_cs": "the same windows with the luminance term dropped: did the structure "
@@ -114,7 +132,8 @@ def aggregate(results: list[dict], by: tuple[str, ...]) -> list[dict]:
     for key, rs in groups.items():
         row = dict(zip(by, key))
         for m in ("ssim", "ssim_cs", "cell_r", "rgb_rmse", "bytes"):
-            vals = [r[m] for r in rs if not (isinstance(r[m], float) and np.isnan(r[m]))]
+            vals = [r[m] for r in rs
+                    if r[m] is not None and not (isinstance(r[m], float) and np.isnan(r[m]))]
             row[m] = float(np.mean(vals)) if vals else float("nan")
         row["n"] = len(rs)
         out.append(row)

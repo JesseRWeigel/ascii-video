@@ -41,7 +41,7 @@ def write(fh, cols: int, rows: int, chunks: Iterable[str], *, fps: float = 24.0,
         if i == 0 and hide_cursor:
             data = "\x1b[?25l\x1b[2J" + data
         # From the index every time. An accumulator here drifts by one float rounding per
-        # frame, which is invisible for ten frames and is a visible lag over ten thousand.
+        # frame, which is invisible over ten frames and is a visible lag over a long clip.
         fh.write(json.dumps([round(i / fps, 6), "o", data]) + "\n")
         n += 1
     if hide_cursor and n:

@@ -32,6 +32,7 @@ All three compare the source against `raster.rasterize`, the image a terminal wo
 
 from __future__ import annotations
 
+import math
 from dataclasses import asdict, dataclass
 
 import numpy as np
@@ -53,7 +54,9 @@ class Scores:
     rgb_rmse: float
 
     def as_dict(self) -> dict:
-        return {k: round(v, 6) for k, v in asdict(self).items()}
+        """JSON-ready. NaN becomes null, because bare NaN is not JSON and every reader of
+        this file downstream, including the browser, refuses to parse it."""
+        return {k: (None if math.isnan(v) else round(v, 6)) for k, v in asdict(self).items()}
 
 
 def luminance(img: np.ndarray) -> np.ndarray:
