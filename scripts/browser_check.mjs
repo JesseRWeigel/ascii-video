@@ -68,13 +68,19 @@ if (!browser) {
   process.exit(2);
 }
 
+// The study directory is an argument, not a fixed path. It defaulted to <root>/out, which
+// passed in the working tree because a previous run had left one there and failed in a fresh
+// clone, where nothing has written to out/ yet. verify.sh points this at its own temp dir.
+const outDir = process.env.ASCIIVID_OUT || process.argv[2] || join(root, 'out');
 const pagePath = join(root, 'docs', 'index.html');
-const expectPath = join(root, 'out', 'browser_expect.json');
-const reportPath = join(root, 'out', 'fidelity.json');
+const expectPath = join(outDir, 'browser_expect.json');
+const reportPath = join(outDir, 'fidelity.json');
 for (const p of [pagePath, expectPath, reportPath]) {
   if (!existsSync(p)) {
-    console.error(`missing ${tidy(p)}. Run the study and scripts/build_docs.py first; `
-      + 'this check has nothing to compare against.');
+    console.error(`missing ${tidy(p)}. Run these first, or point ASCIIVID_OUT at a `
+      + 'directory that already has them:');
+    console.error('    python3 -m asciivid study --out out && python3 scripts/build_docs.py');
+    console.error('This check has nothing to compare against until then.');
     await browser.close();
     process.exit(2);
   }

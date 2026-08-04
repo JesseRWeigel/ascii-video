@@ -235,7 +235,7 @@ else
 fi
 
 if command -v node >/dev/null 2>&1; then
-  if node scripts/browser_check.mjs >"$TMP/browser.log" 2>&1; then
+  if ASCIIVID_OUT="$TMP/out" node scripts/browser_check.mjs >"$TMP/browser.log" 2>&1; then
     grep -E '^  (ok|FAIL|playwright)' "$TMP/browser.log" | scrub | sed 's/^/      /'
     ok "$(tail -1 "$TMP/browser.log") in a real browser"
   else
