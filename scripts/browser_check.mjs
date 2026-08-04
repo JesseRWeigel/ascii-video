@@ -19,7 +19,7 @@
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
@@ -28,7 +28,13 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..');
 const TITLE = 'Video, rendered to characters';
 const require = createRequire(join(root, 'package.json'));
-const tidy = (s) => String(s).split(homedir()).join('~');
+/* Paths are printed relative to this repository, never anchored at the home directory.
+ * verify.sh pastes this output into the README, and a home-anchored path names every
+ * directory above this one, which is not this repository's information to publish. */
+const tidy = (s) => {
+  const str = String(s);
+  return str.startsWith('/') ? relative(root, str) || '.' : str.split(homedir()).join('~');
+};
 
 const candidates = [
   process.env.PLAYWRIGHT_CORE,

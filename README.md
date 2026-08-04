@@ -343,8 +343,8 @@ scripts/make_font.py        regenerates the raster (needs Pillow; not part of th
 
 ## Status
 
-`bash scripts/verify.sh`, run in full. Temporary directory names and sub-millisecond
-timings differ between runs; nothing else does.
+`bash scripts/verify.sh`, run in full, exit code 0. Temporary directory names and
+sub-millisecond timings differ between runs; nothing else does.
 
 ```
 $ bash scripts/verify.sh
@@ -384,7 +384,7 @@ $ bash scripts/verify.sh
           600/600 renders re-derived
           600 renders re-derived from the emitted ANSI
           worst disagreement, as a fraction of the tolerance allowed: ssim 0.249, ssim_cs 0.248, cell_r 0.237, rgb_rmse 0.012
-          every number in /tmp/tmp.rzj61XB1od/out/fidelity.json matches an independent re-derivation within 1e-05 relative (floor 2e-06)
+          every number in /tmp/tmp.uuEUcK7p8i/out/fidelity.json matches an independent re-derivation within 1e-05 relative (floor 2e-06)
   ok    the independent checker agrees with all 600 numbers
 
 4. the checker shares no code with what it checks
@@ -396,12 +396,12 @@ $ bash scripts/verify.sh
   ok    the source frames and the measurements are byte-identical between two runs
 
 6. the exports and the player
-        /tmp/tmp.rzj61XB1od/clip.cast: 49 events, 48 frames, 4786302 bytes
+        /tmp/tmp.uuEUcK7p8i/clip.cast: 49 events, 48 frames, 4786302 bytes
         asciinema v2, 80x30, 49 events, 2.000s, gap spread 1.00e-06s
   ok    .cast export parses and its clock is even
-        played 30 frames at 60fps, 0 dropped, 1 whole and 29 delta, 14120.4 bytes/frame, worst offset 0.101 ms
+        played 30 frames at 60fps, 0 dropped, 1 whole and 29 delta, 14120.4 bytes/frame, worst offset 0.152 ms
   ok    the player runs against a real clock
-        /tmp/tmp.rzj61XB1od/real.cast: 25 events, 24 frames, 145852 bytes
+        /tmp/tmp.uuEUcK7p8i/real.cast: 25 events, 24 frames, 145852 bytes
   ok    a real video file decodes and renders through ffmpeg
 
 7. the page rebuilds identically and runs in a real browser
@@ -411,7 +411,7 @@ $ bash scripts/verify.sh
             ascii10/ansi256/structure+dither       SSIM 0.5251   265867 B packed    83192 B base64+gzip
             ascii67/mono/structure+norm            SSIM 0.0807    92470 B packed    28536 B base64+gzip
   ok    docs/index.html is exactly what the study produces
-        playwright-core from ~/Projects/thousand/projects/a11y-sweep/node_modules/playwright-core
+        playwright-core from ../a11y-sweep/node_modules/playwright-core
         ok    the served page is this project's ("Video, rendered to characters")
         ok    no uncaught errors
         ok    the page makes no external request
@@ -475,6 +475,7 @@ AssertionError: 20346 not less than 18311.4 : tol=12 saved nothing: 20346 vs 203
 9. hygiene
   ok    this directory is its own git repository
   ok    no absolute home paths in tracked files
+  ok    no tracked file names any of the 1 enclosing directories
   ok    no credential-shaped strings in tracked files
         25 tracked files, none contain NUL
   ok    no tracked file is binary to the secret scan
@@ -482,7 +483,7 @@ AssertionError: 20346 not less than 18311.4 : tol=12 saved nothing: 20346 vs 203
   ok    no video binary is tracked (the sources are generated from code)
   ok    README has a Status section whose numbers still match this run
 
-32 passed, 0 failed
+33 passed, 0 failed
 VERIFY OK
 ```
 

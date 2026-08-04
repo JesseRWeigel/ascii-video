@@ -402,6 +402,43 @@ if git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
   if [ -z "$hits" ]; then ok "no absolute home paths in tracked files"
   else bad "absolute home paths found"; printf '%s\n' "$hits" | head -5 | sed 's/^/        /'; fi
 
+  # A tilde path defeats the check above and still names every directory above this one.
+  # This repository sits inside a private tree, and the names of that tree's directories are
+  # not this repository's information to publish. Found in a pasted verify transcript, where
+  # a scrubbed home-anchored path had replaced an absolute one and read as clean.
+  above=""
+  d="$(dirname "$ROOT")"
+  while [ "$d" != "/" ] && [ "$d" != "$HOME" ]; do
+    b="$(basename "$d")"
+    case "$b" in
+      projects|Projects|src|code|repos|work|dev|home|users|tmp|opt|var) ;;
+      ?|??|???) ;;
+      *) above="$above $b";;
+    esac
+    d="$(dirname "$d")"
+  done
+  if [ -z "$above" ]; then
+    ok "no enclosing directory name is distinctive enough to leak"
+  else
+    named=""
+    for b in $above; do
+      if git -C "$ROOT" grep -qIn -e "$b" -- . ":!scripts/verify.sh" 2>/dev/null; then
+        named="$named $b"
+      fi
+    done
+    # The count, never the names. Printing them here would put them in the README, which is
+    # the exact leak this check exists to prevent.
+    n_above=$(printf '%s\n' $above | wc -l)
+    if [ -z "$named" ]; then
+      ok "no tracked file names any of the $n_above enclosing directories"
+    else
+      bad "tracked files name $(printf '%s\n' $named | wc -l) enclosing private directories"
+      for b in $named; do
+        git -C "$ROOT" grep -Ilne "$b" -- . ":!scripts/verify.sh" | head -3 | sed 's/^/        in /'
+      done
+    fi
+  fi
+
   keys=$(git -C "$ROOT" grep -n -E 'sk-[A-Za-z0-9]{20}|ghp_[A-Za-z0-9]{36}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{10}' \
          -- . 2>/dev/null || true)
   if [ -z "$keys" ]; then ok "no credential-shaped strings in tracked files"
